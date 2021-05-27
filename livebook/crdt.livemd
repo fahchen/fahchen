@@ -1,0 +1,565 @@
+# Introductions to Conflict-free Replicated Data Type (CRDT)
+
+## 一个问题
+
+想象一下，我们将要打造一个跨行星的视频流服务。每当用户上传视频时，我们都会在不同星球的不同数据中心复制视频，以保持良好的吞吐量和延迟，从而获得更好的用户体验。此外，我们希望向用户显示该视频的浏览量。
+
+视频上传是主从复制的好例子。然而，对于统计浏览这个功能来说，事情可能会变得复杂。由于整个星球上有很多并发用户，并且具有写的频次高（write-heavy）的特点，因此使用一个计数器不是一个好主意，因为这可能会导致特别受欢迎的视频阻塞。同时我们也不需要事务，因为问题的性质允许我们放松强一致性的要求，从而提高应用程序的可用性。然而，大多数现有解决方案都基于对资源的进行排他性写操作。
+
+## CRDT 是什么
+
+在很多系统中，数据被存储在不同的副本中，比如：
+
+1. 跨终端数据同步，如：购物软件同步购物车
+2. 分布式数据库，如
+3. 协作软件，如： Google Doc, Notion, Figma 等
+
+在以上使用系统中都存在一个共同的问题需要解决，**如何在不同的副本上并发地修改数据**。
+
+通常来讲有两种方法来解决这个问题：
+
+1. 强一致性的: Strongly consistent replication
+2. 乐观的: **Optimistic replication** (CRDT 要解决的)
+
+**CRDT 定义:**
+
+A **Conflict-free Replicated Data Type (CRDT)** is a data structure that simplifies distributed data storage systems and multi-user applications.
+
+无冲突是一个模糊的描述，我们尝试给它一个定义：当我们要操作一个数据结构，不需要获取一个排他锁就能进行写操作，并且能够检测并发更新并执行确定性的自动冲突解决。这并不意味着冲突永远不会发生，而是我们始终能够根据数据结构本身包含的信息来给出确定的结果。
+
+1. 任何副本都能在不对齐（校准）其他副本的情况下进行编辑
+2. 任一两个副本接收到同样的更新时，它们的状态能通过合并达到一致
+
+## Types
+
+1. **State-based**
+2. Operation-based
+3. Delta-based
+
+### State-based CRDTs
+
+基础的类型有 `Counter`, `Register` 及 `Set`。它们都涉及一个最重要的方法 —— `MERGE`。
+
+三个重要特性：
+
+1. 结合性
+   Associativity states that the parentheses don’t matter. Formally speaking, x ∨ (y ∨ z) = (x ∨ y) ∨ z must hold (mathematicians usually write ∨ for join). You know associativity from adding and multiplying numbers.
+
+2. 交换性
+   Commutativity states that the order of joining doesn’t matter. Formally, x ∨ y must be equal to y ∨ x. Adding and multiplying numbers is also commutative.
+
+3. 幂等
+   Idempotence states that joining a value to itself always returns the value itself. This is not something that numbers typically do. Unless you consider taking the maximum of two numbers.
+
+两种支持以上特性的数据结构：
+
+* union of two sets
+* maximum of two values
+
+### Property based testing
+
+```elixir
+Mix.install([
+  {:propcheck, "~> 1.4"}
+])
+```
+
+```elixir
+use PropCheck
+
+quickcheck(
+  forall str <- utf8() do
+    # IO.inspect(str)
+    equals(str, str)
+  end
+)
+```
+
+```elixir
+alias MapSet, as: Set
+use PropCheck
+
+# assoc 结合
+quickcheck(
+  forall [a_list, b_list, c_list] <- [list(), list(), list()] do
+    a = Set.new(a_list)
+    b = Set.new(b_list)
+    c = Set.new(c_list)
+
+    # (( a ∪ b ) ∪ c) = (a ∪ ( b ∪ c ))
+    ab_c = Set.union(Set.union(a, b), c)
+    a_bc = Set.union(a, Set.union(b, c))
+
+    equals(ab_c, a_bc)
+  end
+)
+
+# commute 交换
+quickcheck(
+  forall [a_list, b_list] <- [list(), list()] do
+    a = Set.new(a_list)
+    b = Set.new(b_list)
+
+    # ( a ∪ b ) = ( b ∪ a )
+    ab = Set.union(a, b)
+    ba = Set.union(b, a)
+
+    equals(ab, ba)
+  end
+)
+
+# idem 幂等
+# ( a ) = (a ∪ a)
+quickcheck(
+  forall l <- list() do
+    a = Set.new(l)
+    b = Set.union(a, a)
+
+    equals(a, b)
+  end
+)
+```
+
+### Growing-only Counter(GCounter)
+
+只允许增加的计数器，可以解决我们最开始提出的那个问题。
+
+```elixir
+defmodule Counter do
+  use GenServer
+  defstruct [:id, :value, :others]
+
+  @impl true
+  def init(id) do
+    {:ok, %__MODULE__{id: id, value: 0, others: %{}}}
+  end
+
+  @impl true
+  def handle_call(:increment, _from, %__MODULE__{} = state) do
+    %__MODULE__{
+      id: id,
+      value: value
+    } = state
+
+    value = value + 1
+
+    IO.puts("Counter(#{id}) increments one to #{value}")
+
+    {:reply, value, %{state | value: value}}
+  end
+
+  @impl true
+  def handle_call({:sync, {id, value}}, _from, state) do
+    %__MODULE__{others: others} = state
+
+    IO.puts("Counter(#{state.id}) syncs from Counter(#{id}) with value #{value}")
+
+    others = Map.put(others, id, value)
+
+    {:reply, :ok, %{state | others: others}}
+  end
+
+  @impl true
+  def handle_call(:sum, _from, state) do
+    %__MODULE__{
+      id: id,
+      value: value,
+      others: others
+    } = state
+
+    sum =
+      Enum.reduce(others, value, fn {_replica_id, replica_value}, acc ->
+        acc + replica_value
+      end)
+
+    IO.puts("Sum on counter(#{id}) is #{sum}")
+
+    {:reply, sum, state}
+  end
+end
+```
+
+```elixir
+{:ok, counter1} = GenServer.start_link(Counter, 1)
+{:ok, counter2} = GenServer.start_link(Counter, 2)
+
+# increment on counter1
+value = GenServer.call(counter1, :increment)
+
+GenServer.call(counter2, :sum)
+GenServer.call(counter2, {:sync, {1, value}})
+GenServer.call(counter2, :sum)
+
+# increment on counter2
+value = GenServer.call(counter2, :increment)
+GenServer.call(counter1, :sum)
+GenServer.call(counter2, :sum)
+GenServer.call(counter1, {:sync, {2, value}})
+GenServer.call(counter1, :sum)
+GenServer.call(counter2, :sum)
+```
+
+### Increment/decrement Counter
+
+同时支持增加和减少操作，内部使用两个 GCounter 来实现，一个用于维护增加，另一个用于维护减少。
+
+### Vector Clock(矢量时钟)
+
+在大部分系统里面，我们使用 timestamp 来定义 causality (a happened-before relationship)，
+但是这个在一个分布式的系统里面存在一些问题：
+
+1. 副本可能位于不同的数据中心，导致[时钟偏移](https://zh.wikipedia.org/wiki/时钟偏移)
+2. timestamp 无法告知我们来自不同副本间的先后关系（系统管理员甚至可以手动修改系统时间）
+
+以上问题可以使用矢量时钟来解决，由每个副本特有的单调递增表示，和上面讲的 Gcounter 类似。
+
+如何对比两个时钟：
+
+1. 如果对应副本的所有值都相等，则时钟相等
+2. 如果左侧的所有值都低于或等于右侧的对应值，则左侧小于右侧
+3. 如果左侧的所有值都大于或等于右侧的对应值，则左侧大于右侧
+4. 其他结果都意味着我们检测到并发更新
+
+![Vector Clock](https://upload.wikimedia.org/wikipedia/commons/5/55/Vector_Clock.svg)
+
+```elixir
+defmodule Clock do
+  @moduledoc false
+
+  @type replica_name :: term
+  @type clock :: pos_integer()
+  @type context :: %{replica_name => clock}
+  @type replica_clock :: {replica_name, context}
+
+  @doc """
+  Returns a list of replicas from a list of contexts.
+  """
+  @spec clockset_replicas([clock]) :: [State.name()]
+  def clockset_replicas(clockset) do
+    for {replica, _} <- clockset, do: replica
+  end
+
+  @doc """
+  Adds a replicas context to a clockset, keeping only dominate contexts.
+  """
+  @spec append_clock([replica_clock], replica_clock) :: [replica_clock]
+  def append_clock(clockset, {_, clock}) when map_size(clock) == 0, do: clockset
+
+  def append_clock(clockset, {node, clock}) do
+    big_clock = combine_clocks(clockset)
+
+    cond do
+      dominates?(clock, big_clock) -> [{node, clock}]
+      dominates?(big_clock, clock) -> clockset
+      true -> filter_clocks(clockset, {node, clock})
+    end
+  end
+
+  @doc """
+  Checks if one clock causally dominates the other for all replicas.
+  """
+  @spec dominates?(context, context) :: boolean
+  def dominates?(c1, c2) when map_size(c1) < map_size(c2), do: false
+
+  def dominates?(c1, c2) do
+    Enum.reduce_while(c2, true, fn {replica, clock}, true ->
+      if Map.get(c1, replica, 0) >= clock do
+        {:cont, true}
+      else
+        {:halt, false}
+      end
+    end)
+  end
+
+  @doc """
+  Checks if one clock causally dominates the other for their shared replicas.
+  """
+  def dominates_or_equal?(c1, c2) when c1 == %{} and c2 == %{}, do: true
+  def dominates_or_equal?(c1, _c2) when c1 == %{}, do: false
+
+  def dominates_or_equal?(c1, c2) do
+    Enum.reduce_while(c1, true, fn {replica, clock}, true ->
+      if clock >= Map.get(c2, replica, 0) do
+        {:cont, true}
+      else
+        {:halt, false}
+      end
+    end)
+  end
+
+  @doc """
+  Returns the upper bound causal context of two clocks.
+  """
+  def upperbound(c1, c2) do
+    Map.merge(c1, c2, fn _, v1, v2 -> max(v1, v2) end)
+  end
+
+  @doc """
+  Returns the lower bound causal context of two clocks.
+  """
+  def lowerbound(c1, c2) do
+    Map.merge(c1, c2, fn _, v1, v2 -> min(v1, v2) end)
+  end
+
+  defp filter_clocks(clockset, {node, clock}) do
+    clockset
+    |> Enum.reduce({[], false}, fn {node2, clock2}, {set, insert} ->
+      if dominates?(clock, clock2) do
+        {set, true}
+      else
+        {[{node2, clock2} | set], insert || !dominates?(clock2, clock)}
+      end
+    end)
+    |> case do
+      {new_clockset, true} -> [{node, clock} | new_clockset]
+      {new_clockset, false} -> new_clockset
+    end
+  end
+
+  defp combine_clocks(clockset) do
+    clockset
+    |> Enum.map(fn {_, clocks} -> clocks end)
+    |> Enum.reduce(%{}, &upperbound(&1, &2))
+  end
+end
+```
+
+```elixir
+ExUnit.start(autorun: false)
+
+defmodule ClockTest do
+  use ExUnit.Case
+
+  test "dominates?" do
+    clock1 = %{a: 1, b: 2, c: 3}
+    clock2 = %{b: 2, c: 3, d: 1}
+    clock3 = %{a: 1, b: 2}
+    assert Clock.dominates?(clock1, clock3)
+    refute Clock.dominates?(clock3, clock1)
+    refute Clock.dominates?(clock1, clock2)
+    assert Clock.dominates?(clock1, clock1)
+  end
+
+  # 先看下方的 Lattices 的定义
+
+  test "upperbound" do
+    assert Clock.upperbound(%{a: 1, b: 2, c: 2}, %{a: 3, b: 1, d: 2}) ==
+             %{a: 3, b: 2, c: 2, d: 2}
+
+    assert Clock.upperbound(%{}, %{a: 3, b: 1, d: 2}) == %{a: 3, b: 1, d: 2}
+    assert Clock.upperbound(%{a: 3, b: 1, d: 2}, %{}) == %{a: 3, b: 1, d: 2}
+    assert Clock.upperbound(%{a: 3, b: 1, d: 2}, %{a: 3, b: 1, d: 2}) == %{a: 3, b: 1, d: 2}
+  end
+
+  test "lowerbound" do
+    assert Clock.lowerbound(%{a: 1, b: 2, c: 2}, %{a: 3, b: 1, d: 2}) ==
+             %{a: 1, b: 1, c: 2, d: 2}
+
+    assert Clock.lowerbound(%{}, %{a: 3, b: 1, d: 2}) == %{a: 3, b: 1, d: 2}
+    assert Clock.lowerbound(%{a: 3, b: 1, d: 2}, %{}) == %{a: 3, b: 1, d: 2}
+  end
+
+  test "test the set trims" do
+    clock1 = {:a, %{a: 1, b: 2, c: 3}}
+    clock2 = {:b, %{b: 2, c: 3, d: 1}}
+    clock3 = {:c, %{a: 1, b: 2}}
+    assert [clock2, clock3] == Clock.append_clock([clock2, clock3], clock1) |> Enum.sort()
+    assert [clock1, clock2] == Clock.append_clock([clock1, clock2], clock3) |> Enum.sort()
+    assert [clock1, clock2] == Clock.append_clock([clock1, clock2], clock1) |> Enum.sort()
+    assert [clock1, clock2] == Clock.append_clock([clock1, clock2], clock2) |> Enum.sort()
+    assert [clock1, clock2, clock3] == Clock.append_clock([clock1, clock3], clock2) |> Enum.sort()
+
+    assert [:b, :c] ==
+             [clock2, clock3]
+             |> Clock.append_clock(clock1)
+             |> Clock.clockset_replicas()
+             |> Enum.sort()
+  end
+end
+
+ExUnit.run()
+```
+
+### Lattices
+
+考虑如下例子：
+
+1. A 和 B 初始值都是 `[1]`
+2. A 和 B 断开连接
+3. A 添加一个元素 `2` -> `[1, 2]`
+4. B 添加一个元素 `3` -> `[1, 3]`
+5. A 和 B 重新连接
+
+很明显合并后的状态时 `[1, 2, 3]`，使用数学表达叫[格](https://zh.wikipedia.org/wiki/格_(数学))。
+![lattice](https://upload.wikimedia.org/wikipedia/commons/e/ea/Hasse_diagram_of_powerset_of_3.svg)
+
+这里大家已经注意到了和前面的 `Vector Clock` 一样，并不是任意两个值之间都能比较大小，因为除了大于小于等于外，还存在一种不确定的状态。
+但 CRDTss 并不关心这种不确定状态，因为 CRDTs 只允许单调的更新，也就是说任何操作只会让数据“越来越大”。
+这个“变大”的过程就是在确定[`上确界`](https://zh.wikipedia.org/wiki/最小上界)。
+
+假设我们有个偏序集合 `M`，包含元素 `a，b ...`。如果一个值 `c` 满足 `a <= c` 且 `b <= c`，并且没有任何其他的元素比 `c` 接近 `a` 和 `b`，
+那么我们就叫 `c` 是 `a` 和 `b` 的上确界。
+
+1. `c` 属于 `M`，且
+2. `a <= c`，且
+3. `b <= c`，且
+4. 对于所有 `M` 中的 `d`：
+   1. 如果 `a <= d` 且 `b <= d`
+   2. 则 `c <= d`
+
+🌰 自然数集合，令 `a = 2`，`b = 3`，如果 `c = 5` 时，不满足上述定义。
+
+### Growing-only Set(GSet)
+
+* 只能添加新的元素
+* 不能删除元素
+
+🌰 投票系统，判断一个人是否参会，同时可以使用一个 `GCounter` 来统计票数（同时保证匿名性）
+
+### 2-Phase Set
+
+内部由两个 `GSet` 实现，一个用于增加，一个用户删除（`tombstones`）
+
+* 可以添加和删除
+* 但是当元素删除时，`tombstones GSet` 会无限增长
+* 当添加一个已经被删除的元素时，由于并没有实现从 GSet 中删除元素的方法，所以一旦元素被删除就永远存储在 `tombstones GSet` 中
+
+### Observed Remove Set（ORSSet)
+
+* 可以添加和删除
+* 当元素被删除时依然有 `tombstones` 无限增长的问题
+
+使用键值对存储 `{element, timestamp}`，键为元素，值为其最后一次添加或删除的时间。当合并的时候我们根据更新时间，以较大的更新时间的值为准。
+这里我们可以使用 `Datetime` 来表示 timestamp，也可以使用上面讲到的 `Vector Clock` 来表示。
+当新增和删除冲突时，通常我们以新增为准，即：Add-Wins Observed Remove Set。
+
+## Phoenix.Presence
+
+> Phoenix Presence is a feature which allows you to register process information
+> on a topic and replicate it transparently across a cluster.
+
+1. no single point of failure
+2. no single source of truth
+3. relies entirely on the standard library with no operational dependencies
+4. self heals
+
+🌰 获取当前在线的用户
+
+![](images/phoenix-presence.png.png)
+
+### Observe Remove Set Without Tombstones(ORSWOT)
+
+* 可以添加和删除，且不存在 tombstones
+* 对于同一个元素的并发新增和删除，以新增为准 -> add-wins
+
+**Version Vectors:**
+
+`A = [{a, 3}, {b, 2}, {c, 1}]`：`Actor a` 有 3 次更新，`Actor b` 有 2 次更新，`Actor c` 有 1 次更新。
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+# 比较
+[{a, 3}, {b, 2}, {c, 1}] === [{a, 3}, {b, 2}, {c, 1}]
+[{a, 3}, {b, 2}, {c, 1}] > [{a, 2}, {b, 2}, {c, 1}]
+[{a, 1}] > []
+# partial ordering
+[{a, 1}] >= []
+
+
+# 合并
+A   = [{a, 1}]
+B   =         [{b, 1}]
+AB  = [{a, 1}, {b, 1}]
+```
+
+**ORSWOT 数据结构:**
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+{version_verctor, entries}
+
+entry = {element, version_vector}
+
+orswot = {[{x, 1}, {y, 2}, [{"data1", [{x, 1}]}, {"data2", [{y, 1}]}]]}
+```
+
+**Adding an element**
+
+* 增加 ORSWOT 中的 version_vector，如果不存在则存储为 1
+* 更新的 `{actor, counter}` 存储在 entries 里面，如果存在则覆盖
+
+`actor_y` 将 "data2" 添加进 `{[{x, 1}], [{"data1", [{x, 1}]}]}` 中等于：
+`{ [ {x,1}, {y,1} ] , [ {“Data1”, [ {x,1} ] }, {“Data2”, [ {y,1} ] } ] }`
+
+**Removing an element**
+
+* ORSWOT 中的 version_vector 不变
+* 将 element entryentry 直接从 ORSWOT 的 entries 中移除（不存在 tombstones）
+
+从 ORSWOT `{ [ {x,1}, {y,1} ] , [ {“Data1”, [ {x,1} ] }, {“Data2”, [ {y,1} ] } ] }` 中移除 `data1` 等于：
+`{ [ {x,1}, {y,1} ] , [ {“Data2”, [ {y,1} ] } ] }`
+
+**Examples:**
+
+1. `actor x` 添加 `data1`
+2. `actor y` 添加 `data2`
+3. `actor y` 添加 `data3`
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+A =
+  {[{x, 1}, {y, 2}], [{"data1", [{x, 1}]}, {"data2", [{y, 1}]}, {"data3", [{y, 2}]}]}
+```
+
+B =
+
+1. `actor x` 添加 `data1`
+2. `actor y` 添加 `data2`
+3. `actor z` 添加 `data3`
+4. `actor z` 添加 `data4`
+5. `actor z` 移除 `data1`
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+B =
+  { [ {x,1}, {y,1}, {z,2} ] , [ {“Data2”, [ {y,1} ] }, {“Data3”, [ {z,1} ] }, {“Data4”, [ {z,2} ] } ] }
+```
+
+合并后：
+
+<!-- livebook:{"force_markdown":true} -->
+
+```elixir
+Megered =
+  { [ {x,1}, {y,2}, {z,2} ] , [ {“Data2”, [ {y,1} ] }, {“Data3”, [ {y,2}, {z,1} ] }, {“Data4”, [ {z,2} ] } ] }
+```
+
+合并规则：
+
+* Version vectors for ORSWOT A and ORSWOT B merged
+* Elements merged:
+  * Common elements only kept if there exists a non-empty dots for them from merging (*):
+    * Common dot pairs for the element in ORSWOT A and ORSWOT B
+    * Dot pairs for the element only in ORSWOT A where the dot pair count is greater than any count for the same actor in ORSWOT B’s version vector
+    * Dot pairs for the element only in ORSWOT B where the dot pair count is greater than any count for the same actor in ORSWOT A’s version vector
+  * Elements only in ORSWOT A only kept if there exists a non-empty dots for them after:
+    * Keeping only dot pairs for the element where the dot pair count is greater than any count for the same actor in ORSWOT B’s version vector
+  * Elements only in ORSWOT B only kept if there exists a non-empty dots for them after:
+    * Keeping only dot pairs for the element where the dot pair count is greater than any count for the same actor in ORSWOT A’s version vector
+
+*As you might think, if there doesn’t exist an appropriate actor pair/count in the version vector then the dot pair is merged/kept
+
+![](images/merging-example.png.png)
+
+## 参考
+
+* [https://medium.com/@amberovsky/crdt-conflict-free-replicated-data-types-b4bfc8459d26](https://medium.com/@amberovsky/crdt-conflict-free-replicated-data-types-b4bfc8459d26)
+* [https://lars.hupel.info/topics/crdt/01-intro/](https://lars.hupel.info/topics/crdt/01-intro/)
+* [https://dockyard.com/blog/2016/03/25/what-makes-phoenix-presence-special-sneak-peek](https://dockyard.com/blog/2016/03/25/what-makes-phoenix-presence-special-sneak-peek)
+* [https://hal.inria.fr/file/index/docid/555588/filename/techreport.pdf](https://hal.inria.fr/file/index/docid/555588/filename/techreport.pdf)
+* [https://bartoszsypytkowski.com/the-state-of-a-state-based-crdts/](https://bartoszsypytkowski.com/the-state-of-a-state-based-crdts/)
+* [https://riak.com/why-vector-clocks-are-easy/](https://riak.com/why-vector-clocks-are-easy/)
