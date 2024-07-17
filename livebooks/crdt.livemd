@@ -445,7 +445,7 @@ ExUnit.run()
 
 🌰 获取当前在线的用户
 
-![](images/phoenix-presence.png.png)
+![](images/phoenix-presence.png)
 
 ### Observe Remove Set Without Tombstones(ORSWOT)
 
@@ -553,7 +553,7 @@ Megered =
 
 *As you might think, if there doesn’t exist an appropriate actor pair/count in the version vector then the dot pair is merged/kept
 
-![](images/merging-example.png.png)
+![](images/merging-example.png)
 
 ## 参考
 
