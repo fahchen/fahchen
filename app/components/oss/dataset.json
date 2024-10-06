@@ -1,0 +1,67 @@
+{
+  "$schema": "./dataset.schema.json",
+  "pulls": [
+    {
+      "title": "fix: include custom ports in aws_sigv4_* functions",
+      "url": "https://github.com/wojtekmach/req/pull/405"
+    },
+    {
+      "title": "fix: handle nil environment values correctly in Sentry config",
+      "url": "https://github.com/getsentry/sentry-elixir/pull/753"
+    },
+    {
+      "title": "fix: make t:Oban.Job.replace_by_state_option/0 a keyword item instead of a keyword",
+      "url": "https://github.com/oban-bg/oban/pull/1103"
+    },
+    {
+      "title": "fix: add priv to package",
+      "url": "https://github.com/elixir-grpc/grpc/pull/360"
+    },
+    {
+      "title": "feat(zod-openapi): use z.input to infer input types of the request",
+      "url": "https://github.com/honojs/middleware/pull/286"
+    },
+    {
+      "title": "Get aggregate state",
+      "url": "https://github.com/commanded/commanded/pull/448"
+    },
+    {
+      "title": "Fix commanded aggregate race",
+      "url": "https://github.com/commanded/commanded/pull/308"
+    },
+    {
+      "title": "feat: add --skip-unavailable flag to skip downloading unavailable artifacts",
+      "url": "https://github.com/philss/rustler_precompiled/pull/8"
+    },
+    {
+      "title": "feat: precompiled binaries",
+      "url": "https://github.com/tessi/wasmex/pull/321"
+    },
+    {
+      "title": "fix: 🐛 chunk split",
+      "url": "https://github.com/appcues/mojito/pull/88"
+    },
+    {
+      "title": "fix(plugin-vue): allow to overwrite feature flags",
+      "url": "https://github.com/vitejs/vite/pull/2675"
+    },
+    {
+      "title": "fix: if offset is less than limit, set limit to offset",
+      "url": "https://github.com/absinthe-graphql/absinthe_relay/pull/141"
+    }
+  ],
+  "projects": [
+    {
+      "repository": "elixir-typed-structor/typed_structor",
+      "description": "TypedStructor is a library for defining typed structs, exceptions and record macros with effortlessly."
+    },
+    {
+      "repository": "Byzanteam/kysely_postgres_js_dialect",
+      "description": "Kysely dialect for PostgreSQL using the Postgres.js client."
+    },
+    {
+      "repository": "Byzanteam-Labs/hierarch",
+      "description": "Tree structure & hierarchy for ecto models with ltree(Postgres)"
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "OSS link dataset",
+  "description": "A dataset of links to OSS contributions",
+  "type": "object",
+  "properties": {
+    "pulls": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/pull"
+      }
+    },
+    "projects": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/project"
+      }
+    }
+  },
+  "definitions": {
+    "pull": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        }
+      },
+      "required": [
+        "title",
+        "url"
+      ]
+    },
+    "project": {
+      "type": "object",
+      "properties": {
+        "repository": {
+          "type": "string",
+          "format": "^.*/.*$"
+        },
+        "description": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "repository",
+        "description"
+      ]
+    }
+  }
+}
