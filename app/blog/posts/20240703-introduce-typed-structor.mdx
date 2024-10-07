@@ -1,0 +1,92 @@
+---
+title: 'Introduce TypedStructor'
+publishedAt: '2024-07-05'
+summary: 'Introduce a new libary to define typed structs, exceptions and record macros with effortlessly.'
+---
+
+## Introduction
+
+Why do types matter? Types can help catch errors early in development by ensuring that the data your functions and modules work with is of the expected form. This reduces runtime errors and makes your code more predictable and easier to debug. By using typespecs, you also make your code more readable for others (and for your future self), as it clearly communicates what kind of data structures are expected and returned. 
+
+In Elixir, we often define structs, and each time we do, we want to define their types as well. The same applies when defining an `Ecto.Schema`, we also want to define its types. However, defining types for structs and schemas can be a bit verbose and repetitive. The most popular library used by the community is `typed_struct`, but it has lacked maintenance and updates for a while. This is where `TypedStructor` comes in to fill the gap, providing a more modern and flexible way to define typed structs and more features.
+
+## Typical usage
+
+Here's an example of how to use `TypedStructor` to define a typed struct:
+
+```elixir
+defmodule User do
+  use TypedStructor
+
+  typed_structor do
+    parameter :id
+
+    field :id, id
+    field :name, String.t(), default: "Unknown"
+    field :age, non_neg_integer(), enforce: true
+  end
+end
+```
+
+In this example:
+1. [`typed_structor`](https://hexdocs.pm/typed_structor/TypedStructor.html#typed_structor/2) macro is used to define the struct and its types
+2. [`parameter`](https://hexdocs.pm/typed_structor/TypedStructor.html#parameter/2) macro is used to define the struct parameters
+3. [`field`](https://hexdocs.pm/typed_structor/TypedStructor.html#field/3) macro is used to define each field of the struct, optionally with a default value and enforcement
+
+This example is equivalent to writing the following code manually:
+
+```elixir
+defmodule User do
+  defstruct [:id, :name, :age]
+
+  @type t(id) :: %__MODULE__{
+    id: id | nil,
+    name: String.t(),
+    age: non_neg_integer()
+  }
+end
+```
+
+Besides defining typed structs, `TypedStructor` also provides macros to define typed exceptions and records. Check out the [documentation](https://hexdocs.pm/typed_structor) for more information.
+
+```elixir
+defmodule HTTPException do
+  use TypedStructor
+
+  typed_structor definer: :defexception, enforce: true do
+    field :status, non_neg_integer()
+  end
+
+  @impl Exception
+  def message(%__MODULE__{status: status}) do
+    "HTTP status #{status}"
+  end
+end
+
+defmodule TypedStructor.User do
+  use TypedStructor
+
+  typed_structor definer: :defrecord, record_name: :user, record_tag: User, enforce: true do
+    field :name, String.t()
+    field :age, pos_integer()
+  end
+end
+```
+
+## Extending with plugins
+
+For more customization, `TypedStructor` provides a plugin system that allows you to extend the functionality of the library. This is useful when you want to extract some common logic into a separate module.
+
+Many plugins are available, and you can find them in the [documentation](https://hexdocs.pm/typed_structor/introduction.html). To keep the library lightweight, plugins are described in documentation rather than as separate packages, making it easy to copy, paste and customize them for your project. This approach is inspired by the [shadcn/ui](https://ui.shadcn.com) library.
+
+Some useful plugins include (they are well-tested and documented):
+- [Add fields docs to the @typedoc](https://hexdocs.pm/typed_structor/doc_fields.html)
+- [Implement Access behavior](https://hexdocs.pm/typed_structor/accessible.html)
+- [Type Only on Ecto Schema](https://hexdocs.pm/typed_structor/type_only_on_ecto_schema.html)
+- [Derives the Jason.Encoder for struct](https://hexdocs.pm/typed_structor/derive_jason.html)
+
+## Conclusion
+
+As your codebase grows, the importance of using types becomes increasingly evident. Combining types with the documentation significantly enhances both the quality and maintainability of code. `TypedStructor` offers a modern, flexible solution to help manage and define typed structs, making Elixir development smoother and more efficient.
+
+Check out the [TypedStructor](https://github.com/elixir-typed-structor/typed_structor) on GitHub and Hex.pm.
