@@ -2,6 +2,22 @@
   "$schema": "./dataset.schema.json",
   "pulls": [
     {
+      "title": "fix: prevent double encoding for aws url",
+      "url": "https://github.com/wojtekmach/req/pull/434"
+    },
+    {
+      "title": "feat: skip encryption headers",
+      "url": "https://github.com/wojtekmach/req_s3/pull/12"
+    },
+    {
+      "title": "fix: use URI.parse instead of URI.new! in normalize_url function to allow unescaped characters in the path",
+      "url": "https://github.com/wojtekmach/req_s3/pull/11"
+    },
+    {
+      "title": "fix: encode path in url for aws_sigv4_url/1",
+      "url": "https://github.com/wojtekmach/req/pull/433"
+    },
+    {
       "title": "fix: include custom ports in aws_sigv4_* functions",
       "url": "https://github.com/wojtekmach/req/pull/405"
     },
