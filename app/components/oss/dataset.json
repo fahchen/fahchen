@@ -68,6 +68,10 @@
   ],
   "projects": [
     {
+      "repository": "byzanteam/coloured_flow",
+      "description": "Workflow engine based on Coloured Petri Net."
+    },
+    {
       "repository": "elixir-typed-structor/typed_structor",
       "description": "TypedStructor is a library for defining typed structs, exceptions and record macros with effortlessly."
     },
