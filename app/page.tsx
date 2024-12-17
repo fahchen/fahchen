@@ -6,10 +6,10 @@ const aboutMe =
 export default function Page() {
   return (
     <section>
-      <h1 className="mb-8 text-2xl font-semibold tracking-tighter">
+      <h1 className="mb-4 text-2xl font-semibold tracking-tighter">
         {`Hi, I'm Phil Chen (fahchen).`}
       </h1>
-      <p className="mb-4">{aboutMe}</p>
+      <p className="mb-10">{aboutMe}</p>
       <div className="my-8">
         <BlogPosts />
       </div>
