@@ -1,1 +1,1 @@
-export { default as dataset } from "./oss/dataset.json" with { type: "json" };
+export { default as dataset } from './oss/dataset.json' with { type: 'json' };

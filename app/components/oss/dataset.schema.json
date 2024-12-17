@@ -29,10 +29,7 @@
           "format": "uri"
         }
       },
-      "required": [
-        "title",
-        "url"
-      ]
+      "required": ["title", "url"]
     },
     "project": {
       "type": "object",
@@ -45,10 +42,7 @@
           "type": "string"
         }
       },
-      "required": [
-        "repository",
-        "description"
-      ]
+      "required": ["repository", "description"]
     }
   }
 }
