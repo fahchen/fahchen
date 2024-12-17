@@ -29,6 +29,11 @@ export function BlogPosts() {
                 {post.metadata.title}
               </p>
             </div>
+            <div className="w-full flex flex-col md:flex-row text-base">
+              <p className="text-neutral-600 dark:text-neutral-400 tracking-tight">
+                {post.metadata.summary}
+              </p>
+            </div>
           </Link>
         ))}
     </div>
