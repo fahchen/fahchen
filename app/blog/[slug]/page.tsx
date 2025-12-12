@@ -98,7 +98,9 @@ export default async function Blog({ params }) {
         <CustomMDX source={post.content} />
       </article>
 
-      <Comments />
+      <div className="mt-16">
+        <Comments />
+      </div>
     </section>
   );
 }
