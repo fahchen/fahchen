@@ -1,4 +1,5 @@
 import { formatDate, getBlogPosts } from 'app/blog/utils';
+import { Comments } from 'app/components/comments';
 import { CustomMDX } from 'app/components/mdx';
 import { baseUrl } from 'app/sitemap';
 import { notFound } from 'next/navigation';
@@ -94,6 +95,8 @@ export default function Blog({ params }) {
       <article className="prose">
         <CustomMDX source={post.content} />
       </article>
+
+      <Comments />
     </section>
   );
 }
