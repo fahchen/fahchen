@@ -1,0 +1,258 @@
+---
+title: 'Leveraging Elixir Compile Callbacks in EctoTypedSchema'
+publishedAt: '2025-12-12'
+summary: 'A deep dive into how EctoTypedSchema uses @on_definition and @before_compile to automatically generate accurate typespecs for Ecto schemas'
+---
+
+## The Problem
+
+If you've worked with Ecto schemas, you've likely encountered the pain of keeping `@type t()` in sync with your schema definition. A typical schema looks like this:
+
+```elixir
+defmodule User do
+  use Ecto.Schema
+
+  @type t() :: %__MODULE__{
+    id: integer(),
+    name: String.t() | nil,
+    email: String.t() | nil,
+    role: :admin | :user | nil,
+    inserted_at: NaiveDateTime.t() | nil,
+    updated_at: NaiveDateTime.t() | nil
+  }
+
+  schema "users" do
+    field :name, :string
+    field :email, :string
+    field :role, Ecto.Enum, values: [:admin, :user]
+
+    timestamps()
+  end
+end
+```
+
+Every time you add, remove, or change a field, you have to manually update `@type t()`. It's tedious and error-prone. [EctoTypedSchema](https://github.com/elixir-typed-structor/ecto_typed_schema) solves this by automatically generating the type from the schema definition. Just replace `use Ecto.Schema` with `use EctoTypedSchema` and `schema` with `typed_schema`:
+
+```elixir
+defmodule User do
+  use EctoTypedSchema
+
+  typed_schema "users" do
+    field :name, :string
+    field :email, :string
+    field :role, Ecto.Enum, values: [:admin, :user]
+
+    timestamps()
+  end
+end
+```
+
+The `@type t()` is generated automatically at compile time. But how does this actually work? In this article, we'll explore the compile-time hooks that make this possible.
+
+## Understanding Elixir's Compile Callbacks
+
+Elixir provides several module callbacks that allow you to hook into the compilation process. The two key ones used by EctoTypedSchema are:
+
+- **`@on_definition`** — invoked each time a function or macro is defined in the module
+- **`@before_compile`** — invoked just before the module is compiled, after all code has been evaluated
+
+These callbacks enable a powerful pattern: **observe during definition, act before compilation**. Let's see how EctoTypedSchema uses each one.
+
+## Phase 1: Hooking into Ecto with @on_definition
+
+The first challenge is: how do you know what fields Ecto has registered? Ecto stores all field metadata in a function called `__changeset__/0`, which it defines at compile time. The function returns a map like:
+
+```elixir
+%{
+  id: :id,
+  name: :string,
+  email: :string,
+  role: {:parameterized, {Ecto.Enum, %{values: [:admin, :user], ...}}},
+  inserted_at: :naive_datetime,
+  updated_at: :naive_datetime
+}
+```
+
+EctoTypedSchema captures this function's AST body the moment Ecto defines it, using `@on_definition`:
+
+```elixir
+@on_definition {EctoTypedSchema, :on_def}
+
+def on_def(env, :def, :__changeset__, [], [], body) do
+  Module.put_attribute(env.module, :ecto_typed_schema_changeset_body, body)
+end
+
+def on_def(_env, _kind, _name, _args, _guards, _body), do: :ok
+```
+
+This callback receives the `Macro.Env`, the kind (`:def` or `:defp`), the function name, arguments, guards, and the body. EctoTypedSchema pattern-matches specifically on `:def` + `:__changeset__` — ignoring every other function definition — and stores the raw AST body into a module attribute for later use.
+
+This is the key insight: `@on_definition` fires for *every* function defined in the module, including those defined by other macros. When `Ecto.Schema` internally defines `__changeset__/0`, EctoTypedSchema intercepts it.
+
+## Phase 2: Accumulating Field Metadata via Macro Wrappers
+
+In addition to intercepting `__changeset__/0`, EctoTypedSchema replaces Ecto's field macros with its own wrappers. When you write `field :name, :string` inside `typed_schema`, you're actually calling `EctoTypedSchema.field/3`, not `Ecto.Schema.field/3`. This is achieved by re-importing:
+
+```elixir
+defmacro typed_schema(source, opts, do: block) do
+  quote location: :keep do
+    @ecto_typed_schema_source unquote(source)
+    @ecto_typed_schema_opts unquote(opts)
+
+    Ecto.Schema.schema unquote(source) do
+      import Ecto.Schema, only: []          # Remove Ecto's field macros
+      import EctoTypedSchema, only: [...]   # Bring in our wrappers
+
+      unquote(block)
+    end
+  end
+end
+```
+
+Each wrapper macro does two things: (1) stores typing metadata in an accumulating module attribute, and (2) delegates to the real Ecto macro:
+
+```elixir
+defmacro field(name, type \\ :string, opts \\ []) do
+  {typed, opts} = Keyword.pop(opts, :typed, [])
+
+  quote location: :keep do
+    @ecto_typed_schema_typed {unquote(name), unquote(Macro.escape(typed))}
+    Ecto.Schema.field(unquote(name), unquote(type), unquote(opts))
+  end
+end
+```
+
+The `@ecto_typed_schema_typed` attribute is registered with `accumulate: true`, so each field definition appends a `{field_name, typed_opts}` tuple. By the time all field macros have been expanded, the attribute holds a complete list of per-field type overrides.
+
+## Phase 3: Generating Types with @before_compile
+
+After all field macros have been expanded and Ecto has defined `__changeset__/0`, the `@before_compile` callback fires. This is where the actual type generation happens:
+
+```elixir
+@before_compile EctoTypedSchema
+
+defmacro __before_compile__(env) do
+  # 1. Extract field info from Ecto's __changeset__/0 AST
+  changeset_info =
+    env.module
+    |> Module.get_attribute(:ecto_typed_schema_changeset_body)
+    |> EctoTypedSchema.ChangesetExtractor.extract()
+
+  # 2. Collect per-field type overrides
+  override_map =
+    env.module
+    |> Module.get_attribute(:ecto_typed_schema_typed, [])
+    |> Map.new()
+
+  # 3. Build TypedStructor field definitions
+  fields_ast = build_fields_ast(changeset_info, override_map, schema_defaults, primary_keys)
+
+  # 4. Emit a typed_structor block that generates @type t()
+  emit_typed_structor(schema_source, structor_opts, plugins_ast, parameters_ast, fields_ast, ...)
+end
+```
+
+The `ChangesetExtractor` parses the raw AST of `__changeset__/0` into structured `{field_name, ecto_type}` tuples. It handles different AST shapes — primitive atoms, parameterized types, associations, and embeds:
+
+```elixir
+def extract(do: {:%{}, _meta, field_list}) do
+  Enum.map(field_list, fn
+    {field_name, {:parameterized, {module, params}}} -> ...
+    {field_name, {:assoc, {:%{}, _meta, assoc_args}}} -> ...
+    {field_name, {:embed, {:%{}, _meta, embed_args}}} -> ...
+    {field_name, field_type} -> {field_name, field_type}
+  end)
+end
+```
+
+For each field, `TypeMapper` converts the Ecto type to a quoted Elixir typespec. For example, `:string` becomes `String.t()`, `{:array, :integer}` becomes `list(integer())`, and `Ecto.Enum` with `values: [:admin, :user]` becomes `:admin | :user`.
+
+The final output is a `typed_structor` block — delegating the actual struct and type definition to [TypedStructor](https://hexdocs.pm/typed_structor):
+
+```elixir
+defp emit_typed_structor(_source, opts, plugins, parameters, fields, additional_fields) do
+  quote do
+    typed_structor unquote(opts) do
+      unquote(plugins)
+      unquote(parameters)
+      field :__meta__, Ecto.Schema.Metadata.t(__MODULE__), null: false
+      unquote(fields)
+      unquote(additional_fields)
+    end
+  end
+end
+```
+
+## The Compilation Timeline
+
+Here's the full sequence of what happens when a module using `EctoTypedSchema` compiles:
+
+```
+1. `use EctoTypedSchema`
+   └── Registers @before_compile and @on_definition hooks
+   └── Registers accumulating module attributes
+   └── Imports schema-definition macros
+
+2. `typed_schema "users" do ... end`
+   └── Calls `Ecto.Schema.schema/2` (Ecto sets up its internals)
+   └── For each `field`, `belongs_to`, etc.:
+       ├── Stores {field, typed_opts} in @ecto_typed_schema_typed
+       └── Delegates to `Ecto.Schema.field/3` (Ecto records the field)
+
+3. Ecto defines `__changeset__/0`
+   └── @on_definition fires → captures the AST body
+
+4. @before_compile fires
+   └── Extracts field types from __changeset__/0 AST
+   └── Merges with per-field overrides from @ecto_typed_schema_typed
+   └── Emits typed_structor block → generates @type t()
+```
+
+## Through-Association Resolution at Compile Time
+
+One interesting detail is how EctoTypedSchema handles `through` associations — associations that traverse other associations (e.g., `has_many :tags, through: [:posts, :tags]`). These don't appear in `__changeset__/0`, so they need special handling.
+
+During `@before_compile`, the library walks the association chain at compile time, loading each intermediate schema to discover the final target:
+
+```elixir
+defp resolve_through_schema(assocs, through_path) do
+  [first_step | rest_steps] = through_path
+
+  case List.keyfind(assocs, first_step, 0) do
+    {_, first_assoc} ->
+      initial_schema = first_assoc.related
+
+      Enum.reduce_while(rest_steps, initial_schema, fn step_name, current_schema ->
+        if Code.ensure_loaded?(current_schema) and
+             function_exported?(current_schema, :__schema__, 2) do
+          case current_schema.__schema__(:association, step_name) do
+            nil -> {:halt, nil}
+            assoc -> {:cont, assoc.related}
+          end
+        else
+          {:halt, nil}
+        end
+      end)
+
+    nil -> nil
+  end
+end
+```
+
+This uses `Code.ensure_loaded?/1` and `function_exported?/3` to check if the intermediate schemas are already compiled and available for introspection — a technique that leverages Elixir's ability to introspect modules at compile time. If a schema in the chain hasn't been compiled yet, it falls back to `term()` with a compile-time warning.
+
+## Takeaways
+
+EctoTypedSchema demonstrates a powerful pattern in Elixir metaprogramming:
+
+1. **`@on_definition`** lets you observe what other macros define, without modifying their behavior. This is how EctoTypedSchema taps into Ecto's internals without forking or patching Ecto.
+
+2. **Module attribute accumulation** (`accumulate: true`) provides a clean way to collect metadata across multiple macro expansions, then process it all at once later.
+
+3. **`@before_compile`** gives you a "last word" — a chance to generate code after all other definitions are in place, with full visibility into everything the module contains.
+
+4. **Macro shadowing** (re-importing your own macros over another library's) lets you intercept and augment existing DSLs transparently.
+
+These compile callbacks are one of Elixir's underappreciated features. They enable libraries to compose with each other at compile time, building sophisticated abstractions without runtime overhead.
+
+Check out [EctoTypedSchema](https://github.com/elixir-typed-structor/ecto_typed_schema) on GitHub.
