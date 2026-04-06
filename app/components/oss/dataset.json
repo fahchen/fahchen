@@ -68,6 +68,14 @@
   ],
   "projects": [
     {
+      "repository": "fahchen/grephql",
+      "description": "Compile-time GraphQL client for Elixir with typed Ecto schemas."
+    },
+    {
+      "repository": "elixir-typed-structor/ecto_typed_schema",
+      "description": "Auto-generate accurate @type t() specs from your Ecto schema definitions."
+    },
+    {
       "repository": "byzanteam/coloured_flow",
       "description": "Workflow engine based on Coloured Petri Net."
     },
