@@ -115,16 +115,17 @@ html {
   @apply list-decimal pl-6;
 }
 
-.prose > :first-child {
+.prose > :first-child:first-child {
   /* Override removing top margin, causing layout shift */
-  margin-top: 1.25em !important;
-  margin-bottom: 1.25em !important;
+  margin-top: 1.25em;
+  margin-bottom: 1.25em;
 }
 
 pre::-webkit-scrollbar {
   display: none;
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: scrollbar styles don't conflict with .prose pre */
 pre {
   -ms-overflow-style: none; /* IE and Edge */
   scrollbar-width: none; /* Firefox */

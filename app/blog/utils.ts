@@ -17,7 +17,6 @@ function parseFrontmatter(fileContent: string) {
   const frontMatterLines = frontMatterBlock.trim().split('\n');
   const metadata: Partial<Metadata> = {};
 
-  // biome-ignore lint: complexity/noForEach
   frontMatterLines.forEach((line) => {
     const [key, ...valueArr] = line.split(': ');
     let value = valueArr.join(': ').trim();
