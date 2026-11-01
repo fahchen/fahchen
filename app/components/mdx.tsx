@@ -68,6 +68,7 @@ function slugify(str: ReactNode) {
 }
 
 function createHeading(level: number) {
+  // biome-ignore lint/correctness/noComponentHookFactories: Created once at module initialization.
   const Heading = ({ children }: { children: ReactNode }) => {
     const slug = slugify(children);
     return React.createElement(
