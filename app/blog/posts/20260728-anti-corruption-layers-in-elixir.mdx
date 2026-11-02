@@ -54,7 +54,13 @@ defmodule Store.PaymentProvider.Orders do
 end
 ```
 
-Configuration selects the adapter. The order domain calls its own port; the adapter depends on that port, not the other way around. The adapter stores the link between the order and the provider payment ID. The domain keeps only an opaque reference to that link. The integration can use it to reconcile the local payment with the provider later. The provider client and reference storage are omitted here to keep the example focused on the boundary. `Money` includes the amount and currency. `save_reference/2` returns `{:error, :reference_storage_failed}` if storage fails. In production, persist a correlation and idempotency key before calling the provider, reuse it on retries, and retry webhooks whose reference is not yet available; a remote payment can otherwise be created before the local link is saved.
+Configuration selects the adapter.
+
+> **Dependency direction:** The order domain calls its own port; the adapter implements and depends on that port. The domain does not depend on the provider adapter.
+
+The adapter stores the link between the order and the provider payment ID. The domain keeps only an opaque reference to that link. The integration can use it to reconcile the local payment with the provider later. The provider client and reference storage are omitted here to keep the example focused on the boundary. `Money` includes the amount and currency. `save_reference/2` returns `{:error, :reference_storage_failed}` if storage fails.
+
+> **External requests and retries:** A provider may create a payment before the local link is saved. Persist a correlation and idempotency key before calling the provider, reuse it on retries, and retry webhooks whose reference is not yet available. Provider-supported idempotency and reconciliation are still needed to handle ambiguous results.
 
 ## Inbound: translate webhooks
 
@@ -90,7 +96,9 @@ The resulting event is defined by the order domain:
 }
 ```
 
-The integration resolves the provider's ID to the store's payment reference, then passes the event to the order domain's public API. The domain handles its own event, not the provider's payload. Webhooks can be retried or arrive out of order. Deduplicate deliveries and enforce valid payment state transitions; use provider versions or ordering information when available, rather than relying on timestamps alone.
+The integration resolves the provider's ID to the store's payment reference, then passes the event to the order domain's public API. The domain handles its own event, not the provider's payload.
+
+> **Webhook delivery:** Webhooks can be retried or arrive out of order. Deduplicate deliveries and enforce valid payment state transitions; use provider versions or ordering information when available, rather than relying on timestamps alone.
 
 ## Test both sides
 
