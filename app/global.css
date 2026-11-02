@@ -87,6 +87,14 @@ html {
   @apply my-4 text-neutral-800 dark:text-neutral-200;
 }
 
+.prose blockquote {
+  @apply my-4 rounded-lg border border-neutral-200 bg-neutral-50 px-4 py-3 dark:border-neutral-800 dark:bg-neutral-900;
+}
+
+.prose blockquote p {
+  @apply my-2 first:mt-0 last:mb-0;
+}
+
 .prose h1 {
   @apply text-4xl font-medium tracking-tight mt-6 mb-2;
 }
@@ -143,7 +151,28 @@ table {
   display: block;
   max-width: fit-content;
   overflow-x: auto;
-  white-space: nowrap;
+}
+
+.prose table {
+  @apply my-4 rounded-lg border border-neutral-200 dark:border-neutral-800 text-sm;
+  border-spacing: 0;
+}
+
+.prose th,
+.prose td {
+  @apply border-b border-r border-neutral-200 dark:border-neutral-800 px-3 py-2 text-left align-top;
+}
+
+.prose th {
+  @apply bg-neutral-50 dark:bg-neutral-900 font-medium;
+}
+
+.prose tr > :last-child {
+  @apply border-r-0;
+}
+
+.prose tbody tr:last-child > * {
+  @apply border-b-0;
 }
 
 .title {
