@@ -68,7 +68,47 @@
   ],
   "projects": [
     {
-      "repository": "fahchen/grephql",
+      "repository": "fahchen/owlet",
+      "description": "A native macOS app for translation, writing, and vocabulary learning."
+    },
+    {
+      "repository": "fahchen/pbeam",
+      "description": "A portable BEAM interpreter and standalone executable runtime in development."
+    },
+    {
+      "repository": "fahchen/redbug-cli",
+      "description": "A terminal interface for tracing remote Erlang and Elixir nodes with redbug."
+    },
+    {
+      "repository": "fahchen/suikou",
+      "description": "A local review workbench for files and diffs, with an agent CLI."
+    },
+    {
+      "repository": "fahchen/musubi",
+      "description": "A server-authoritative Elixir store runtime for TypeScript and React clients."
+    },
+    {
+      "repository": "fahchen/oban_musubi",
+      "description": "An Oban dashboard built with React and Musubi."
+    },
+    {
+      "repository": "fahchen/dprint_markdown_formatter",
+      "description": "An Elixir Markdown formatter powered by dprint and Rust."
+    },
+    {
+      "repository": "fahchen/fs_notify",
+      "description": "A cross-platform native file watcher for Elixir using Rustler."
+    },
+    {
+      "repository": "fahchen/ritual",
+      "description": "Composable Igniter-based Mix tasks for bootstrapping Elixir and Phoenix tooling."
+    },
+    {
+      "repository": "fahchen/Thockspace",
+      "description": "A macOS menu bar app for mechanical keyboard sounds with spatial audio."
+    },
+    {
+      "repository": "fahchen/typed_gql",
       "description": "Compile-time GraphQL client for Elixir with typed Ecto schemas."
     },
     {

@@ -1,7 +1,7 @@
 ---
-title: 'Building Grephql: A Compile-time GraphQL Client for Elixir'
+title: 'Building TypedGql: A Compile-time GraphQL Client for Elixir'
 publishedAt: '2026-04-06'
-summary: 'How I built Grephql, a compile-time GraphQL client for Elixir that validates queries at compile time and generates typed responses.'
+summary: 'How I built TypedGql, a compile-time GraphQL client for Elixir that validates queries at compile time and generates typed responses.'
 ---
 
 ## The Problem
@@ -26,17 +26,17 @@ Req.post!("https://api.github.com/graphql", json: %{query: query})
 
 The field `nmae` doesn't exist — but nothing stops you from compiling and deploying this code. The error only surfaces when this code path executes in production. On top of that, the response is an untyped map, so you're left navigating nested `Map.get/2` calls with no guarantees about the shape of the data.
 
-I wanted something better: **catch query errors at compile time, and get typed responses for free**. That's why I built [Grephql](https://github.com/fahchen/grephql).
+I wanted something better: **catch query errors at compile time, and get typed responses for free**. That's why I built [TypedGql](https://github.com/fahchen/typed_gql).
 
-## What Grephql Does
+## What TypedGql Does
 
-Grephql is a compile-time GraphQL client for Elixir. It parses and validates your GraphQL queries against a schema during `mix compile`, then generates typed Ecto embedded schemas for both responses and variables. At runtime, it simply sends the pre-validated query string over HTTP via [Req](https://github.com/wojtekmach/req) and decodes the response into typed structs.
+TypedGql is a compile-time GraphQL client for Elixir. It parses and validates your GraphQL queries against a schema during `mix compile`, then generates typed Ecto embedded schemas for both responses and variables. At runtime, it simply sends the pre-validated query string over HTTP via [Req](https://github.com/wojtekmach/req) and decodes the response into typed structs.
 
 Here's what using it looks like:
 
 ```elixir
 defmodule MyApp.GitHub do
-  use Grephql,
+  use TypedGql,
     otp_app: :my_app,
     source: "priv/schemas/github.json",
     endpoint: "https://api.github.com/graphql"
@@ -53,7 +53,7 @@ defmodule MyApp.GitHub do
 end
 ```
 
-That's it. At compile time, Grephql will:
+That's it. At compile time, TypedGql will:
 
 1. Parse the query and validate it against your GraphQL schema
 2. Generate `MyApp.GitHub.GetUser.Result` — an Ecto embedded schema matching the query's selection set
@@ -74,7 +74,7 @@ The compilation pipeline has four stages:
 
 ### 1. Parsing
 
-The lexer is NimbleParsec-based, and the parser uses an Erlang yecc grammar file (`grephql_parser.yrl`). Both are adapted from [Absinthe](https://github.com/absinthe-graphql/absinthe)'s lexer and parser (MIT licensed). Absinthe already has a battle-tested, spec-compliant GraphQL parser — forking it let me focus on the compile-time validation and type generation layers instead of reinventing document parsing from scratch. Huge thanks to the Absinthe team for their excellent work. The parser outputs a complete AST with source location information for accurate error reporting.
+The lexer is NimbleParsec-based, and the parser uses an Erlang yecc grammar file (`typed_gql_parser.yrl`). Both are adapted from [Absinthe](https://github.com/absinthe-graphql/absinthe)'s lexer and parser (MIT licensed). Absinthe already has a battle-tested, spec-compliant GraphQL parser — forking it let me focus on the compile-time validation and type generation layers instead of reinventing document parsing from scratch. Huge thanks to the Absinthe team for their excellent work. The parser outputs a complete AST with source location information for accurate error reporting.
 
 ### 2. Validation
 
@@ -86,13 +86,13 @@ Nine validation rules run against the AST, closely following the [GraphQL spec](
 - **Fragments** — do type conditions match? Are there cycles?
 - **Directives**, **Input Objects**, **Values**, **Operations**, and **Deprecation warnings**
 
-All rules share a unified AST traversal (`Traversal.traverse_all/4`) that walks both operations and fragments in a single pass.
+All rules share a unified AST traversal (`Traversal.traverse_all/4`) to walk operations and fragments.
 
 ### 3. Type Generation
 
-This is where the magic happens. For each query, Grephql generates two sets of modules:
+This is where the magic happens. For each query, TypedGql generates two sets of modules:
 
-**Output types** — per-query Ecto embedded schemas following the naming convention `Client.FunctionName.Result.Field.NestedField`. Union and interface types use a parameterized `Grephql.Types.Union` Ecto type that dispatches on the `__typename` field from the JSON response.
+**Output types** — per-query Ecto embedded schemas following the naming convention `Client.FunctionName.Result.Field.NestedField`. Union and interface types use a parameterized `TypedGql.Types.Union` Ecto type that dispatches on the `__typename` field from the JSON response.
 
 **Input types** — schema-level modules under `Client.Inputs.TypeName` with a `build/1` function that validates input through Ecto changesets. Variables get their own module `Client.FunctionName.Variables` with field-level validation.
 
@@ -100,7 +100,7 @@ This is where the magic happens. For each query, Grephql generates two sets of m
 
 The `defgql` macro ties everything together. It defines a function that:
 1. Builds and validates variables via `Variables.build/1`
-2. Calls `Grephql.execute/3` which sends the query via `Req.post!/2`
+2. Calls `TypedGql.execute/3` which sends the query via `Req.post/1`
 3. Decodes the JSON response into typed structs via `Ecto.embedded_load/3`
 
 The generated function includes a proper `@spec` and `@doc` with a variable reference table and links to generated modules.
@@ -120,7 +120,7 @@ Using Ecto's type system was a deliberate choice. Ecto's `embedded_load/3` handl
 The `deffragment` macro lets you define reusable fragments that are resolved at compile time:
 
 ```elixir
-deffragment :user_fields, ~GQL"""
+deffragment ~GQL"""
   fragment UserFields on User {
     name
     email
@@ -144,12 +144,12 @@ Fragment dependencies are automatically resolved and appended to the query docum
 
 ### Installation
 
-Add `grephql` to your `mix.exs`:
+Add `typed_gql` to your `mix.exs`:
 
 ```elixir
 def deps do
   [
-    {:grephql, "~> 0.3.0"}
+    {:typed_gql, "~> 0.14.0"}
   ]
 end
 ```
@@ -157,7 +157,7 @@ end
 ### Download Your Schema
 
 ```bash
-mix grephql.download_schema \
+mix typed_gql.download_schema \
   --endpoint https://api.example.com/graphql \
   --output priv/schemas/schema.json \
   --header "Authorization: Bearer YOUR_TOKEN"
@@ -167,7 +167,7 @@ mix grephql.download_schema \
 
 ```elixir
 defmodule MyApp.API do
-  use Grephql,
+  use TypedGql,
     otp_app: :my_app,
     source: "priv/schemas/schema.json",
     endpoint: "https://api.example.com/graphql"
@@ -222,7 +222,7 @@ case MyApp.API.list_posts(%{first: 10}) do
     Logger.error("HTTP #{response.status}")
 
   {:error, exception} ->
-    # Network error
+    # Transport, decoding, or other error
     Logger.error(Exception.message(exception))
 end
 ```
@@ -253,17 +253,17 @@ end
 
 ### Formatter Integration
 
-Add the Grephql formatter plugin to auto-format `~GQL` sigils:
+Add the TypedGql formatter plugin to auto-format `~GQL` sigils:
 
 ```elixir
 # .formatter.exs
 [
-  plugins: [Grephql.Formatter]
+  plugins: [TypedGql.Formatter]
 ]
 ```
 
 ## Conclusion
 
-Grephql brings compile-time safety to GraphQL in Elixir. By validating queries and generating typed schemas during compilation, it eliminates an entire category of runtime errors while providing a developer experience that feels natural to Elixir developers — Ecto schemas for responses, changesets for validation, and Req for HTTP.
+TypedGql brings compile-time safety to GraphQL in Elixir. By validating queries and generating typed schemas during compilation, it eliminates an entire category of runtime errors while providing a developer experience that feels natural to Elixir developers — Ecto schemas for responses, changesets for validation, and Req for HTTP.
 
-Check out [Grephql](https://github.com/fahchen/grephql) on GitHub and [HexDocs](https://hexdocs.pm/grephql) for more details.
+Check out [TypedGql](https://github.com/fahchen/typed_gql) on GitHub and [HexDocs](https://hexdocs.pm/typed_gql) for more details.
