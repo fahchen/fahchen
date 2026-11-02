@@ -1,7 +1,8 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { MDXRemote, type MDXRemoteProps } from 'next-mdx-remote/rsc';
-import React, { type ReactNode } from 'react';
+import { render } from 'pele';
+import React, { type ReactNode, useId } from 'react';
 import { highlight } from 'sugar-high';
 import { RunInLivebookLink } from './livebook';
 
@@ -48,6 +49,23 @@ function CustomLink({ href, ...props }: { href: string; children: ReactNode }) {
 
 function RoundedImage({ alt, ...props }: { alt: string; src: string }) {
   return <Image alt={alt} className="rounded-lg" {...props} />;
+}
+
+function Pre({ children }: { children: ReactNode }) {
+  const id = useId().replace(/[^a-zA-Z0-9_-]/g, '');
+  if (
+    React.isValidElement<{ className?: string; children?: string }>(children) &&
+    children.props.className === 'language-mermaid' &&
+    typeof children.props.children === 'string'
+  ) {
+    const { svg } = render(children.props.children, {
+      idPrefix: `diagram-${id}`,
+    });
+    // Diagrams are authored in trusted local MDX files.
+    // biome-ignore lint/security/noDangerouslySetInnerHtml: Pele renders the diagram as SVG.
+    return <div dangerouslySetInnerHTML={{ __html: svg }} />;
+  }
+  return <pre>{children}</pre>;
 }
 
 function Code({ children, ...props }: { children: string }) {
@@ -99,6 +117,7 @@ const components = {
   h6: createHeading(6),
   Image: RoundedImage,
   a: CustomLink,
+  pre: Pre,
   code: Code,
   Table,
   RunInLivebookLink,

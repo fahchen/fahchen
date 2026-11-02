@@ -38,6 +38,9 @@ importers:
       next-mdx-remote:
         specifier: ^6.0.0
         version: 6.0.0(@types/react@19.3.0)(react@19.3.1)
+      pele:
+        specifier: ^1.13.0
+        version: 1.13.0
       postcss:
         specifier: ^8.5.32
         version: 8.5.32
@@ -1117,6 +1120,10 @@ packages:
 
   parse-entities@4.0.2:
     resolution: {integrity: sha512-GG2AQYWoLgL877gQIKeRPGO1xF9+eG1ujIb5soS5gPvLQ1y2o8FL90w2QWNdf9I361Mpp7726c+lj3U0qK1uGw==}
+
+  pele@1.13.0:
+    resolution: {integrity: sha512-Ie8UKY9x00MsuR3jO6AzUwzK2Z6MIV3Tf4EDdITiuk8Uaz8K7g0R082WqsqNaSU8DdgkrRvZThzhit83mi/uiw==}
+    engines: {node: '>=20'}
 
   picocolors@1.1.1:
     resolution: {integrity: sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA==}
@@ -2349,6 +2356,8 @@ snapshots:
       is-alphanumerical: 2.0.1
       is-decimal: 2.0.1
       is-hexadecimal: 2.0.1
+
+  pele@1.13.0: {}
 
   picocolors@1.1.1: {}
 
