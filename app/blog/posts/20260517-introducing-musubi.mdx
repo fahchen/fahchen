@@ -1,12 +1,12 @@
 ---
-title: 'Introducing Musubi: Server-Driven State for Elixir and React'
+title: 'Introducing Musubi: Live Data for Elixir and JavaScript'
 publishedAt: '2026-05-17'
-summary: 'Musubi brings server-authoritative state to Elixir and Phoenix applications with TypeScript or React clients.'
+summary: 'Musubi brings server-authoritative state to Elixir and Phoenix applications with JavaScript and TypeScript clients.'
 ---
 
-What if your frontend could receive **live data** from Elixir, the way Phoenix LiveView keeps a page up to date—but render it with React?
+What if your frontend could receive **live data** from Elixir, the way Phoenix LiveView keeps a page up to date—but render it with the JavaScript frontend of your choice?
 
-[Musubi](https://github.com/fahchen/musubi) explores that idea. LiveView renders the interface on the server and sends updates to the browser. Musubi keeps state and command handling on the server, then sends state updates to a TypeScript or React client that renders the interface.
+[Musubi](https://github.com/fahchen/musubi) explores that idea. LiveView renders the interface on the server and sends updates to the browser. Musubi keeps state and command handling on the server, then sends state updates to the frontend. Its `@musubi/client` package works with TypeScript and JavaScript frontends, including Vue or other frameworks; `@musubi/react` provides a dedicated React client with context and hooks.
 
 I built it because I wanted to use both ecosystems: Elixir and Phoenix for the server, and JavaScript libraries and tools for the frontend.
 
@@ -16,7 +16,7 @@ A Phoenix socket carries a Musubi connection. The client mounts a declared root 
 
 ```mermaid
 sequenceDiagram
-  participant UI as TypeScript or React client
+  participant UI as JavaScript or TypeScript client
   participant Socket as Phoenix socket
   participant Store as Elixir root store
   UI->>Socket: Connect and mount a root store
@@ -63,9 +63,11 @@ defmodule MyAppWeb.Stores.CounterStore do
 end
 ```
 
-After exposing the store through a Musubi socket, the TypeScript client connects, mounts it, and sends commands:
+After exposing the store through a Musubi socket, use the framework-independent `@musubi/client` to connect, mount it, and send commands:
 
 ```ts
+import { connect } from "@musubi/client"
+
 const connection = await connect<Musubi.Stores>(socket)
 
 const { store: counter, unmount } = await connection.mountStore({
@@ -80,6 +82,8 @@ await unmount()
 
 The server handles the increment and sends the resulting state change to the client. Musubi can generate TypeScript declarations from store definitions, so the client can use the store and command types in its editor.
 
+For React, `@musubi/react` builds on the same client and provides a provider and hooks for working with connections, stores, snapshots, and commands. Other frameworks can integrate directly with `@musubi/client`.
+
 ## Building interactive applications
 
 A real application needs more than a single value. Musubi provides tools for common interactions:
@@ -89,7 +93,7 @@ A real application needs more than a single value. Musubi provides tools for com
 - **Async values:** expose loading, success, and failure states while work runs on the server.
 - **Uploads:** accept files with progress reporting, including support for application-provided external uploaders.
 - **Child stores:** split a page into smaller server-owned pieces, each with its own state and behavior.
-- **React integration:** mount stores, read snapshots, and dispatch commands through hooks. Generated TypeScript declarations describe stores and commands.
+- **Client packages:** `@musubi/client` handles the connection, patches, and store proxies. `@musubi/react` builds on it with a provider and hooks for mounting stores, reading snapshots, and dispatching commands. Generated TypeScript declarations describe stores and commands.
 
 These are runtime tools rather than automatic persistence. Your application still owns its domain logic, database, authentication, and cross-connection broadcasts.
 
@@ -102,4 +106,4 @@ I use Musubi in two other projects:
 
 ## Try Musubi
 
-Musubi is pre-1.0, so its APIs may still change. If you are building with Phoenix and want a TypeScript or React interface backed by server-owned state, explore the [repository](https://github.com/fahchen/musubi) and the [documentation](https://hexdocs.pm/musubi).
+Musubi is pre-1.0, so its APIs may still change. If you are building with Phoenix and want a JavaScript or TypeScript interface backed by server-owned state, explore the [repository](https://github.com/fahchen/musubi) and the [documentation](https://hexdocs.pm/musubi).
