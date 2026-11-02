@@ -1,0 +1,38 @@
+---
+title: 'Introducing Suikou: A Workbench for Thoughtful Review'
+publishedAt: '2026-08-03'
+summary: 'Suikou is a local review workbench for reading files and diffs, leaving precise feedback, and iterating with an agent.'
+---
+
+An agent can produce a change quickly. Reviewing it still takes attention: reading the code, understanding the trade-offs, and leaving feedback where it matters.
+
+I built [Suikou](https://github.com/fahchen/suikou) to make that review a conversation. It gives me a place to read closely, attach comments to the work, and hand a review round back to an agent.
+
+![An earlier version of Suikou showing a review comment and an agent reply](/images/suikou/review.png)
+
+*An earlier version of the review interface; the current workflow no longer uses per-file verdicts.*
+
+## Review the work in context
+
+Suikou supports both whole-file and Git diff reviews. Code gets syntax highlighting; Markdown, diagrams, images, and HTML can be viewed in a form suited to the artifact. For HTML, you can switch between reviewing the rendered page and interacting with it.
+
+Comments can be anchored to lines of a file or to elements in an HTML preview. Each comment can say whether it needs a fix, an answer, or is simply a note. That makes the next step clearer for both the reviewer and the agent.
+
+## Work in rounds
+
+The workflow is simple:
+
+1. An agent creates a review for files or a Git diff.
+2. I read the work, leave comments, and submit a round.
+3. The agent responds to the comments and makes any needed changes.
+4. I review the result and continue the discussion if needed.
+
+Suikou's CLI lets an agent create a review, wait for feedback, and reply in the relevant threads. The human submits each round; the conversation stays alongside the work being reviewed.
+
+## Local by design
+
+Suikou runs on your own machine as a single-user workbench. Its interface is available in a browser, so you can also reach it from another device on your network.
+
+The name *Suikou* (推敲) refers to carefully weighing the words you choose. That feels fitting for a tool built around taking a closer look before a change moves on.
+
+Suikou is open source. Explore the project and its setup instructions on [GitHub](https://github.com/fahchen/suikou).
