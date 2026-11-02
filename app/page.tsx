@@ -11,7 +11,7 @@ export default function Page() {
       </h1>
       <p className="mb-10">{aboutMe}</p>
       <div className="my-8">
-        <BlogPosts />
+        <BlogPosts featuredOnly />
       </div>
     </section>
   );

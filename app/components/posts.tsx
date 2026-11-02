@@ -2,12 +2,17 @@ import { formatDate, getBlogPosts } from 'app/blog/utils';
 import Link from 'next/link';
 import { PostLabels } from './post-labels';
 
-export function BlogPosts() {
+export function BlogPosts({
+  featuredOnly = false,
+}: {
+  featuredOnly?: boolean;
+}) {
   const allBlogs = getBlogPosts();
 
   return (
     <div>
       {allBlogs
+        .filter((post) => !featuredOnly || post.metadata.featured === 'true')
         .sort((a, b) => {
           if (
             new Date(a.metadata.publishedAt) > new Date(b.metadata.publishedAt)
