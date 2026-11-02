@@ -4,18 +4,28 @@ publishedAt: '2026-05-17'
 summary: 'Musubi brings server-authoritative state to Elixir and Phoenix applications with TypeScript or React clients.'
 ---
 
-I built [Musubi](https://github.com/fahchen/musubi) for applications where I want Elixir and Phoenix to own the state, while a TypeScript or React client owns the interface.
+What if your frontend could receive **live data** from Elixir, the way Phoenix LiveView keeps a page up to date—but render it with React?
 
-Phoenix LiveView makes server-driven interfaces feel natural, but sometimes I want to build the UI with React. Musubi offers a way to keep state and business logic on the server without giving up that choice of client.
+[Musubi](https://github.com/fahchen/musubi) explores that idea. LiveView renders the interface on the server and sends updates to the browser. Musubi keeps state and command handling on the server, then sends state updates to a TypeScript or React client that renders the interface.
+
+I built it because I wanted to use both ecosystems: Elixir and Phoenix for the server, and JavaScript libraries and tools for the frontend.
 
 ## How it works
 
 A Phoenix socket carries a Musubi connection. The client mounts a declared root store, and Musubi starts a page-scoped server process for it. The store handles commands and renders state; the client receives that state and subsequent JSON Patch updates.
 
 ```mermaid
-flowchart LR
-  UI[React or TypeScript UI] -->|commands| Store[Elixir store]
-  Store -->|state and patches| UI
+sequenceDiagram
+  participant UI as TypeScript or React client
+  participant Socket as Phoenix socket
+  participant Store as Elixir root store
+  UI->>Socket: Connect and mount a root store
+  Socket->>Store: Start page-scoped store process
+  Store-->>UI: Initial state
+  UI->>Store: Dispatch command
+  Store->>Store: Handle command and render state
+  Store-->>UI: JSON Patch update
+  UI->>UI: Render updated state
 ```
 
 The server owns the state, but the client decides how to render it. A connection can mount multiple root stores, and stores can render child stores for parts of a page.
@@ -70,16 +80,25 @@ await unmount()
 
 The server handles the increment and sends the resulting state change to the client. Musubi can generate TypeScript declarations from store definitions, so the client can use the store and command types in its editor.
 
-## More than a counter
+## Building interactive applications
 
-Musubi also provides building blocks for common interactive applications:
+A real application needs more than a single value. Musubi provides tools for common interactions:
 
-- **React integration:** hooks for mounting stores, reading snapshots, and dispatching commands.
-- **Child stores:** organise a page into smaller server-driven pieces.
-- **Async work and streams:** represent work that completes over time.
-- **Uploads and push events:** handle file uploads and send transient events to the client.
+- **Streams:** keep collections such as chat messages up to date with keyed inserts, updates, and deletes. The client holds the items; the server keeps stream configuration and pending operations rather than retaining the collection as stream state.
+- **Push events:** send a transient signal, such as a toast, from a store to its connected client. These events are not durable and are not replayed after a disconnect.
+- **Async values:** expose loading, success, and failure states while work runs on the server.
+- **Uploads:** accept files with progress reporting, including support for application-provided external uploaders.
+- **Child stores:** split a page into smaller server-owned pieces, each with its own state and behavior.
+- **React integration:** mount stores, read snapshots, and dispatch commands through hooks. Generated TypeScript declarations describe stores and commands.
 
 These are runtime tools rather than automatic persistence. Your application still owns its domain logic, database, authentication, and cross-connection broadcasts.
+
+## Musubi in use
+
+I use Musubi in two other projects:
+
+- [Suikou](https://github.com/fahchen/suikou), a review workbench where a React frontend reads and updates server-owned review state.
+- [redbug-cli](https://github.com/fahchen/redbug-cli), a terminal UI for tracing Erlang and Elixir nodes. Its Elixir controller owns state and talks to a React-based terminal client.
 
 ## Try Musubi
 
