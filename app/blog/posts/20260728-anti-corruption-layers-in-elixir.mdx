@@ -1,0 +1,151 @@
+---
+title: 'Anti-Corruption Layers in Elixir: A Boundary for External Integrations'
+publishedAt: '2026-07-28'
+summary: 'Using an anti-corruption layer to keep payment provider details at the boundary of an Elixir application.'
+---
+
+## The problem
+
+An online store uses a payment provider to collect money for an order. The store needs to know whether payment succeeded. The provider responds with its own IDs, statuses, and webhook payloads.
+
+If order logic handles those details directly, a provider change can ripple into the domain and its tests. Where should we translate between the provider's model and the store's?
+
+## Let the domain own its language
+
+The store can define payment in its own terms: an amount to collect and a result such as paid or failed. An **anti-corruption layer** translates between those concepts and the payment provider's API.
+
+The order domain depends on a contract it owns. The provider adapter implements that contract and handles provider-specific details. The domain can then change its payment rules without understanding the provider's payloads, while the adapter can change when the provider's API changes.
+
+## Outbound: a port and an adapter
+
+The order domain defines a **port** for the capability it needs:
+
+```elixir
+defmodule Store.Orders.PaymentGateway do
+  @callback request_payment(order_id :: String.t(), amount :: Money.t()) ::
+              {:ok, payment_reference :: String.t(), payment_url :: String.t()}
+              | {:error, :rejected | :unavailable | :reference_storage_failed}
+
+  def request_payment(order_id, amount) do
+    adapter = Application.fetch_env!(:store, __MODULE__)[:adapter]
+    adapter.request_payment(order_id, amount)
+  end
+end
+```
+
+An adapter implements that behaviour. It translates the amount into a provider request and the response into a result the domain understands:
+
+```elixir
+defmodule Store.PaymentProvider.Orders do
+  @behaviour Store.Orders.PaymentGateway
+
+  @impl true
+  def request_payment(order_id, amount) do
+    case ProviderClient.create_payment(order_id: order_id, amount: amount) do
+      {:ok, response} ->
+        with {:ok, reference} <- save_reference(order_id, response.payment_id) do
+          {:ok, reference, response.checkout_url}
+        end
+
+      {:error, :rejected} -> {:error, :rejected}
+      {:error, :unavailable} -> {:error, :unavailable}
+    end
+  end
+end
+```
+
+Configuration selects the adapter. The order domain calls its own port; the adapter depends on that port, not the other way around. The adapter stores the link between the order and the provider payment ID. The domain keeps only an opaque reference to that link. The integration can use it to reconcile the local payment with the provider later. The provider client and reference storage are omitted here to keep the example focused on the boundary. `Money` includes the amount and currency. `save_reference/2` returns `{:error, :reference_storage_failed}` if storage fails. In production, persist a correlation and idempotency key before calling the provider, reuse it on retries, and retry webhooks whose reference is not yet available; a remote payment can otherwise be created before the local link is saved.
+
+## Inbound: translate webhooks
+
+The provider may report a completed payment through a webhook. For example, an illustrative payload might look like this:
+
+```json
+{
+  "event_id": "evt_456",
+  "type": "payment.completed",
+  "payment": {
+    "id": "pay_123",
+    "merchant_order_id": "order_42",
+    "amount": "49.99",
+    "currency": "USD",
+    "status": "completed"
+  },
+  "completed_at": "2026-11-02T10:00:00Z"
+}
+```
+
+The integration maps provider details to the order domain's terms:
+
+- `payment.id` → an opaque payment reference
+- `payment.completed` → a `PaymentSettled` event
+- `completed_at` → `occurred_at`
+
+The resulting event is defined by the order domain:
+
+```elixir
+%Store.Orders.PaymentSettled{
+  payment_reference: reference,
+  occurred_at: occurred_at
+}
+```
+
+The integration resolves the provider's ID to the store's payment reference, then passes the event to the order domain's public API. The domain handles its own event, not the provider's payload. Webhooks can be retried or arrive out of order. Deduplicate deliveries and enforce valid payment state transitions; use provider versions or ordering information when available, rather than relying on timestamps alone.
+
+## Test both sides
+
+Use a concrete test adapter for the domain's port. Configure it once for the test environment, then let Mimic set expectations per test:
+
+```elixir
+# test/support/payment_gateway_mock.ex
+defmodule Store.Orders.PaymentGatewayMock do
+  @behaviour Store.Orders.PaymentGateway
+
+  @impl true
+  def request_payment(_order_id, _amount), do: raise("unexpected call")
+end
+
+# config/test.exs
+config :store, Store.Orders.PaymentGateway,
+  adapter: Store.Orders.PaymentGatewayMock
+
+# test/test_helper.exs, before ExUnit.start()
+Mimic.copy(Store.Orders.PaymentGatewayMock)
+```
+
+A test can now check the port's configured dispatch without calling the provider:
+
+```elixir
+defmodule Store.Orders.PaymentGatewayTest do
+  use ExUnit.Case, async: true
+  use Mimic
+
+  alias Store.Orders.{PaymentGateway, PaymentGatewayMock}
+
+  setup :verify_on_exit!
+
+  test "requests payment through the configured adapter" do
+    amount = Money.new(:USD, "49.99")
+
+    expect(PaymentGatewayMock, :request_payment, fn "order_42", ^amount ->
+      {:ok, "ref_1", "https://pay.example/1"}
+    end)
+
+    assert {:ok, "ref_1", "https://pay.example/1"} =
+             PaymentGateway.request_payment("order_42", amount)
+  end
+end
+```
+
+Domain tests can use the same double to exercise order behavior. Test the adapter separately with representative API responses and webhook payloads: a domain test alone cannot catch a broken translation. These snippets illustrate the boundary; the `Money` module and test support compilation are application-specific.
+
+## Costs and limits
+
+The boundary adds code: a port, an adapter, and translations to maintain. It pays for itself when provider details would otherwise spread through important business logic; a small pass-through integration may not need it.
+
+There are two practical limits:
+
+- **One configured adapter per port:** if customers need different providers at the same time, use a routing adapter or another dispatch mechanism.
+- **Boundary enforcement:** without automated checks, code review must catch provider details leaking into the domain.
+
+The goal is not to eliminate provider-specific code. It is to give that code a clear home.
