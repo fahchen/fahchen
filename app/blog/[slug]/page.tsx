@@ -1,6 +1,7 @@
 import { formatDate, getBlogPosts } from 'app/blog/utils';
 import { Comments } from 'app/components/comments';
 import { CustomMDX } from 'app/components/mdx';
+import { PostLabels } from 'app/components/post-labels';
 import { baseUrl } from 'app/sitemap';
 import { notFound } from 'next/navigation';
 
@@ -89,10 +90,11 @@ export default async function Blog({ params }) {
       <h1 className="title font-semibold text-2xl tracking-tighter">
         {post.metadata.title}
       </h1>
-      <div className="flex justify-between items-center mt-2 mb-8 text-sm">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-2 mb-8 text-sm">
         <p className="text-sm text-neutral-600 dark:text-neutral-400">
           {formatDate(post.metadata.publishedAt)}
         </p>
+        <PostLabels labels={post.metadata.labels} />
       </div>
       <article className="prose">
         <CustomMDX source={post.content} />

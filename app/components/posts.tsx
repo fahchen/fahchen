@@ -1,5 +1,6 @@
 import { formatDate, getBlogPosts } from 'app/blog/utils';
 import Link from 'next/link';
+import { PostLabels } from './post-labels';
 
 export function BlogPosts() {
   const allBlogs = getBlogPosts();
@@ -34,6 +35,7 @@ export function BlogPosts() {
                 {post.metadata.summary}
               </p>
             </div>
+            <PostLabels labels={post.metadata.labels} />
           </Link>
         ))}
     </div>
