@@ -1,27 +1,10 @@
 import Link from 'next/link';
-
-function ArrowIcon() {
-  return (
-    <svg
-      width="12"
-      height="12"
-      viewBox="0 0 12 12"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-    >
-      <title>ArrowIcon</title>
-      <path
-        d="M2.07102 11.3494L0.963068 10.2415L9.2017 1.98864H2.83807L2.85227 0.454545H11.8438V9.46023H10.2955L10.3097 3.09659L2.07102 11.3494Z"
-        fill="currentColor"
-      />
-    </svg>
-  );
-}
+import { MarkGithubIcon } from './svg/icons';
 
 export default function Footer() {
   return (
-    <footer className="mt-8 mb-16 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-      <ul className="font-sm flex gap-x-4 text-neutral-600 dark:text-neutral-300">
+    <footer className="mt-8 mb-16 flex flex-wrap items-center justify-between gap-x-4 gap-y-2 text-neutral-600 dark:text-neutral-300">
+      <ul className="flex gap-x-4">
         <li>
           <a
             className="flex items-center transition-all hover:text-neutral-800 dark:hover:text-neutral-100"
@@ -29,8 +12,17 @@ export default function Footer() {
             target="_blank"
             href="/rss"
           >
-            <ArrowIcon />
-            <p className="ml-2 h-7">rss</p>
+            <svg
+              aria-hidden="true"
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+            >
+              <circle cx="5" cy="19" r="2" />
+              <path d="M3 10v3a8 8 0 0 1 8 8h3C14 14.9 9.1 10 3 10Zm0-7v3c8.3 0 15 6.7 15 15h3C21 11.1 12.9 3 3 3Z" />
+            </svg>
+            <p className="ml-2">RSS</p>
           </a>
         </li>
         <li>
@@ -40,15 +32,15 @@ export default function Footer() {
             target="_blank"
             href="https://github.com/fahchen"
           >
-            <ArrowIcon />
-            <p className="ml-2 h-7">github</p>
+            <MarkGithubIcon />
+            <p className="ml-2">GitHub</p>
           </a>
         </li>
       </ul>
-      <p className="text-neutral-500 dark:text-neutral-400">
+      <p>
         <Link
           href="https://creativecommons.org/licenses/by-nc-sa/4.0/"
-          className="mr-2"
+          className="mr-2 transition-all hover:text-neutral-800 dark:hover:text-neutral-100"
         >
           CC BY-NC-SA 4.0
         </Link>
