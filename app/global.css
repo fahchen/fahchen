@@ -29,10 +29,6 @@
   }
 }
 
-html {
-  min-width: 360px;
-}
-
 .prose .anchor {
   @apply absolute invisible no-underline;
 
@@ -66,6 +62,7 @@ html {
 
 .prose code {
   @apply px-1 py-0.5 rounded-lg;
+  overflow-wrap: anywhere;
 }
 
 .prose pre code {
